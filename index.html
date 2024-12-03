@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Polynomial Divider</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background-color: #6e6e6e;
+    }
+
+    #container {
+      background-color: #9e9e9e;
+      padding: 20px;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 10px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      box-sizing: border-box;
+    }
+
+    button {
+      background-color: #4CAF50;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+
+    #result,
+    #steps {
+      margin-top: 20px;
+      text-align: left;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="container">
+    <h1>Division of polynomials</h1>
+    <div>
+      <label for="dividend">divisor:</label>
+      <input type="text" id="dividend" placeholder="type the dividend here">
+    </div>
+    <div>
+      <label for="divisor"> dividend:</label>
+      <input type="text" id="divisor" placeholder="type the divisor here">
+    </div>
+    <button onclick="divide()">solve</button>
+    <div id="result"></div>
+    <div id="steps"></div>
+  </div>
+
+  <script>
+    function divide() {
+      const dividend = document.getElementById("dividend").value;
+      const divisor = document.getElementById("divisor").value;
+
+      try {
+        // تحليل كثيرات الحدود
+        const dividendPoly = parsePolynomial(dividend);
+        const divisorPoly = parsePolynomial(divisor);
+
+        // التحقق من صحة المدخلات
+        if (divisorPoly.length === 0 || divisorPoly.every(coeff => coeff === 0)) {
+          throw new Error("المقسوم عليه لا يمكن أن يكون صفرًا.");
+        }
+        if (dividendPoly.length < divisorPoly.length) {
+          throw new Error("درجة المقسوم عليه يجب أن تكون أقل من أو تساوي درجة المقسوم.");
+        }
+
+        // تنفيذ القسمة
+        const {
+          quotient,
+          remainder,
+          steps
+        } = polynomialDivision(dividendPoly, divisorPoly);
+
+        // عرض النتيجة
+        document.getElementById("result").innerHTML = `
+           Quotient: ${formatPolynomial(quotient)}<br>
+          reminder: ${formatPolynomial(remainder)}
+        `;
+
+        // عرض خطوات الحل
+        document.getElementById("steps").innerHTML = steps.join('\n');
+      } catch (error) {
+        document.getElementById("result").innerText = "خطأ: " + error.message;
+        document.getElementById("steps").innerText = "";
+      }
+    }
+
+    function parsePolynomial(input) {
+      input = input.replace(/\s/g, ""); 
+
+      const terms = input.match(/[+-]?(\d*x(\^\d+)?)|[+-]?\d+/g);
+      if (!terms) {
+        throw new Error("خطأ في صيغة كثير الحدود.");
+      }
+
+      const polynomial = [];
+      for (const term of terms) {
+        let coeff = 1;
+        let power = 0;
+        if (term.includes('x')) {
+          const parts = term.split('x');
+          coeff = parseFloat(parts[0] || '1');
+          if (parts[1]) {
+            power = parseInt(parts[1].substring(1)); 
+          } else {
+            power = 1;
+          }
+        } else {
+          coeff = parseFloat(term);
+        }
+        polynomial.push({ coeff, power });
+      }
+
+    
+      polynomial.sort((a, b) => b.power - a.power);
+
+     
+      let maxPower = polynomial[0].power;
+      let coefficients = Array(maxPower + 1).fill(0);
+      for (const term of polynomial) {
+        coefficients[maxPower - term.power] = term.coeff;
+      }
+
+      return coefficients;
+    }
+
+    function formatPolynomial(poly) {
+      if (poly.length === 0) return "0";
+      let result = "";
+      for (let i = 0; i < poly.length; i++) {
+        const coeff = poly[i];
+        const power = poly.length - i - 1;
+        if (coeff !== 0) {
+          if (result !== "") {
+            result += coeff > 0 ? " + " : " - ";
+          } else if (coeff < 0) {
+            result += "-";
+          }
+          if (Math.abs(coeff) !== 1 || power === 0) {
+            result += Math.abs(coeff);
+          }
+          if (power > 0) {
+            result += "x";
+            if (power > 1) {
+              result += `^${power}`;
+            }
+          }
+        }
+      }
+      return result || "0";
+    }
+
+    function polynomialDivision(dividend, divisor) {
+      let quotient = [];
+      let remainder = [...dividend];
+      const steps = [];
+
+      while (remainder.length >= divisor.length && !(remainder.length === 1 && remainder[0] === 0)) {
+        const leadingCoeff = remainder[0] / divisor[0];
+        const degreeDiff = remainder.length - divisor.length;
+        const term = Array(degreeDiff).fill(0).concat(leadingCoeff);
+
+        quotient = addPolynomials(quotient, term);
+        const product = multiplyPolynomials(term, divisor);
+
+        steps.push(`
+          ${formatPolynomial(remainder)}
+        - ${formatPolynomial(product)}
+          --------`);
+
+        remainder = subtractPolynomials(remainder, product);
+
+        while (remainder.length > 0 && remainder[0] === 0) {
+          remainder.shift();
+        }
+
+        steps.push(`  = ${formatPolynomial(remainder)}`);
+      }
+
+      return {
+        quotient,
+        remainder,
+        steps
+      };
+    }
+
+    function addPolynomials(p1, p2) {
+      const maxLength = Math.max(p1.length, p2.length);
+      const result = Array(maxLength).fill(0);
+      for (let i = 0; i < maxLength; i++) {
+        result[i] = (p1[i] || 0) + (p2[i] || 0);
+      }
+      return result;
+    }
+
+    function subtractPolynomials(p1, p2) {
+      return addPolynomials(p1, p2.map(c => -c));
+    }
+
+    function multiplyPolynomials(p1, p2) {
+      const result = Array(p1.length + p2.length - 1).fill(0);
+      for (let i = 0; i < p1.length; i++) {
+        for (let j = 0; j < p2.length; j++) {
+          result[i + j] += p1[i] * p2[j];
+        }
+      }
+      return result;
+    }
+  </script>
+</body>
+
+</html>
